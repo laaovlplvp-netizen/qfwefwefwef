@@ -1,20 +1,12 @@
-name: Build AntiDodge
-
-on:
-  push:
-    branches: [ main ]
-  workflow_dispatch:
-
+name: Build
+on: [push, workflow_dispatch]
 jobs:
   build:
     runs-on: windows-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      - name: Compile
-        run: cl /EHsc AntiDodge.cpp /Fe: AntiDodge.exe /link winhttp.lib advapi32.lib
-      - name: Upload
-        uses: actions/upload-artifact@v4
-        with:
-          name: AntiDodge
-          path: AntiDodge.exe
+    - uses: actions/checkout@v4
+    - run: cl /EHsc AntiDodge.cpp
+    - uses: actions/upload-artifact@v4
+      with:
+        name: AntiDodge
+        path: AntiDodge.exe
