@@ -11,10 +11,10 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-      
+      - name: Setup MSVC
+        uses: ilammy/msvc-dev-cmd@v1
       - name: Compile AntiDodge
-        run: cl /EHsc /D_WIN32_WINNT=0x0601 AntiDodge.cpp /Fe: AntiDodge.exe /link winhttp.lib advapi32.lib
-      
+        run: cl /EHsc /Fe: AntiDodge.exe AntiDodge.cpp
       - name: Upload EXE
         uses: actions/upload-artifact@v4
         with:
