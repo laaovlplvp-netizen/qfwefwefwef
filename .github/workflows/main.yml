@@ -1,12 +1,20 @@
 name: Build
-on: [push, workflow_dispatch]
+
+on:
+  push:
+  workflow_dispatch:
+
 jobs:
   build:
     runs-on: windows-latest
     steps:
-    - uses: actions/checkout@v4
-    - run: cl /EHsc AntiDodge.cpp
-    - uses: actions/upload-artifact@v4
-      with:
-        name: AntiDodge
-        path: AntiDodge.exe
+      - uses: actions/checkout@v4
+      - name: Install MinGW
+        run: choco install mingw -y
+      - name: Compile
+        run: C:\ProgramData\chocolatey\lib\mingw\tools\mingw64\bin\g++.exe -o AntiDodge.exe AntiDodge.cpp
+      - name: Upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: AntiDodge
+          path: AntiDodge.exe
