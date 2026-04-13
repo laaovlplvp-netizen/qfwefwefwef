@@ -18,7 +18,7 @@ jobs:
     
     - name: Compile AntiDodge
       run: |
-        cl /O2 /EHsc /D_WIN32_WINNT=0x0601 /D WIN32_LEAN_AND_MEAN AntiDodge.cpp /o AntiDodge.exe /link iphlpapi.lib ws2_32.lib winhttp.lib advapi32.lib
+        cl /O2 /EHsc /D_WIN32_WINNT=0x0601 /D WIN32_LEAN_AND_MEAN AntiDodge.cpp /Fe: AntiDodge.exe /link iphlpapi.lib ws2_32.lib winhttp.lib advapi32.lib
     
     - name: Upload EXE
       uses: actions/upload-artifact@v4
